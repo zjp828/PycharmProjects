@@ -46,6 +46,16 @@ def getFile(url,pdfname):
     f.close()
     print ("Sucessful to download" + " " + file_name)
 
+#获取断点续传的循环节点
+sql2 = "SELECT * FROM tag"
+cursor.execute(sql2)
+result = cursor.fetchall()
+
+a = result[0][0]
+b = result[0][1]
+c = result[0][2]
+d = result[0][3]
+
 
 # 公司大类
 field_bigType = ""
@@ -71,21 +81,25 @@ field_PDFname=""
 field_PDFid=""
 
 try:
-    for i in bigtype['data']:
-        print("开始爬取"+i['columnname']+",参数"+i['columnid'])
-        field_bigType = str(i['columnname']).strip()
-        field_bigTypeCode = str(i['columnid']).strip()
+    for i in range(0,len(bigtype['data'])):
+        if i <a:
+            continue
+        print("开始爬取"+bigtype['data'][i]['columnname']+",参数"+bigtype['data'][i]['columnid'])
+        field_bigType = str(bigtype['data'][i]['columnname']).strip()
+        field_bigTypeCode = str(bigtype['data'][i]['columnid']).strip()
         # 获取一个类型
         curListHtml = parseHtml(getHtml("http://icid.iachina.cn/ICID/front/leafColComType.do?columnid=%s" % field_bigTypeCode,
                              'GBK'))
         print("-------")
         curList = curListHtml.find_all("li",op_id="type_me")
         # 循环获取单条数据
-        for j in curList:
-            param = j.find("a").get("id")
+        for j in range(0,len(curList)):
+            if i==a and j < b:
+                continue
+            param = curList[j].find("a").get("id")
             if param != None:
-                print(param, j.find("a").get_text())
-                type_code = j.get("type_code")
+                print(param, curList[j].find("a").get_text())
+                type_code = curList[j].get("type_code")
                 # 保存数据库字段——公司类型代码
                 field_companyTypeCode = str(type_code).strip()
                 # 保存数据库字段——公司类型
@@ -93,31 +107,34 @@ try:
                 # 保存数据库字段——公司全名代码
                 field_companyAllNameCode = str(param).strip()
                 # 保存数据库字段——公司全名
-                field_companyAllName = str(j.find("a").get_text()).strip()
+                field_companyAllName = str(curList[j].find("a").get_text()).strip()
 
                 #pdf列表页面
                 curItemUrl="http://icid.iachina.cn/ICID/front/getCompanyInfos.do?columnid=%s&comCode=%s&attr=01" % (field_bigTypeCode, param)
                 curItemList = parseHtml(getHtml(curItemUrl, "GBK")).find("div", class_="jie_nei").find_all("li")
-                for x in curItemList:
+                for x in range(0,len(curItemList)):
+                    if i==a and j == b and x < c:
+                        continue
                     # 保存数据库字段——信息标题
-                    field_informationTitle = x.find("a").get_text()
+                    field_informationTitle = curItemList[x].find("a").get_text()
                     # 保存数据库字段——信息标题代码
-                    field_informationTitleCode =  x.find("a").get("id")
+                    field_informationTitleCode =  curItemList[x].find("a").get("id")
                     # 保存数据库字段——发布时间
-                    field_createTime = x.find("p", class_="kk").get_text()
+                    field_createTime = curItemList[x].find("p", class_="kk").get_text()
 
                     curItemUrl1 = "http://icid.iachina.cn/ICID/front/infoDetail.do?informationno=%s" % str(
                         field_informationTitleCode)
                     pdfhtml = parseHtml(getHtml(curItemUrl1, "GBK")).find("div", class_="pdf_a").find_all("li")
 
-                    for z in pdfhtml:
-
+                    for z in range(0,len(pdfhtml)):
+                        if i == a and j == b and x == c and z <= d:
+                            continue
                         # 保存数据库字段——信息id
-                        field_PDFid = z.find("a").get("id").strip()
+                        field_PDFid = pdfhtml[z].find("a").get("id").strip()
 
                         pdfurl = "http://icid.iachina.cn/ICID/files/piluxinxi/pdf/" + field_PDFid
 
-                        pdfname = z.find("a").get_text().strip()
+                        pdfname = pdfhtml[z].find("a").get_text().strip()
                         # 保存数据库字段——pdf文件名
                         field_PDFname = pdfname
                         # 数据库操作sql
@@ -131,7 +148,12 @@ try:
                         print("开始下载。。。")
                         getFile(pdfurl, field_PDFid)
                         print(pdfname + "已保存")
-        db.commit()  # 提交事务
+
+                        sql1 = "update tag set a = %d,b = %d,c = %d,d = %d"% (i,j,x,z)
+                        cursor.execute(sql1)
+                        db.commit()  # 提交事务
+                        print(i,j,x,z)
+
 except Exception as e:
     db.rollback()
     raise e # 抛出错误
