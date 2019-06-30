@@ -1,14 +1,20 @@
 import urllib.request
+import os
 from bs4 import BeautifulSoup
 #连接mysql
 import pymysql
 #解析json
 import demjson
 
-import random
-
 db = pymysql.connect("localhost", "root", "123456", "localtest")
 cursor = db.cursor()
+
+# 若不存在则创建目录
+path = "D:\\pdf\\"
+if not os.path.exists(path):
+    os.makedirs(path)
+
+
 
 def getHtml(url, charset):
     # 获取网页内容
@@ -34,31 +40,37 @@ def getComType(var):
     typeList = {"01": "集团公司（控股公司）", "02": "财产险公司", "03": "人身险公司", "04": "资产管理公司", "05": "再保险公司"}.get(var,'error')
     return typeList
 
+
 def getFile(url,pdfname):
-    file_name = "D:\\pdf\\"+pdfname
 
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36"}
+    for i in range(0,30):#碰到打不开的url最多重试30次，若不成功，则记录地址后下载下一个文件
+        file_name = path+pdfname
 
-    req = urllib.request.Request(url,None,headers)
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36"}
 
-   # u = urllib.request.urlopen(req)
+        req = urllib.request.Request(url,None,headers)
 
-    try:
-        u = urllib.request.urlopen(req)
-    except:
-        print("下载失败，重新尝试")
-        getFile(url, pdfname)
-        return False
+       # u = urllib.request.urlopen(req)
 
-    f = open(file_name, 'wb')
-    block_sz = 8192#下载大文件
-    while True:
-        buffer = u.read(block_sz)
-        if not buffer:
-            break
-        f.write(buffer)
-    f.close()
-    print ("Sucessful to download" + " " + file_name)
+        try:
+            u = urllib.request.urlopen(req)
+        except:
+            print("下载失败，重新尝试"+str(i))
+            continue
+            # getFile(url, pdfname)
+            # return False
+
+        f = open(file_name, 'wb')
+        block_sz = 8192#下载大文件
+        while True:
+            buffer = u.read(block_sz)
+            if not buffer:
+                break
+            f.write(buffer)
+        f.close()
+        print ("Sucessful to download" + " " + file_name)
+        return True
+    return False
 
 
 #获取断点续传的循环节点
@@ -70,6 +82,8 @@ a = result[0][0]
 b = result[0][1]
 c = result[0][2]
 d = result[0][3]
+
+
 
 
 # 公司大类
@@ -153,21 +167,28 @@ try:
                         # 保存数据库字段——pdf文件名
                         field_PDFname = pdfname
                         # 数据库操作sql
-                        sql = "insert into pdf (field_bigType,field_bigTypeCode,field_companyType,field_companyTypeCode,field_companyAllName,field_companyAllNameCode," \
-                              "field_informationTitle,field_informationTitleCode,field_PDFid,field_PDFname,field_createTime)VALUES ('%s','%s','%s','%s','%s'," \
-                              "'%s','%s','%s','%s','%s','%s')" % (field_bigType,field_bigTypeCode, field_companyType,field_companyTypeCode,field_companyAllName,
-                              field_companyAllNameCode,field_informationTitle,field_informationTitleCode,field_PDFid,field_PDFname,field_createTime)
-                        print(sql)
-                        cursor.execute(sql)
                         print(pdfurl)
                         print("开始下载。。。")
-                        getFile(pdfurl, field_PDFid)
-                        print(pdfname + "已保存")
+                        suDw = getFile(pdfurl, field_PDFid)
+                        if(suDw):
+                            sql = "insert into pdf (field_bigType,field_bigTypeCode,field_companyType,field_companyTypeCode,field_companyAllName,field_companyAllNameCode," \
+                                  "field_informationTitle,field_informationTitleCode,field_PDFid,field_PDFname,field_createTime)VALUES ('%s','%s','%s','%s','%s'," \
+                                  "'%s','%s','%s','%s','%s','%s')" % (
+                                  field_bigType, field_bigTypeCode, field_companyType, field_companyTypeCode,
+                                  field_companyAllName,
+                                  field_companyAllNameCode, field_informationTitle, field_informationTitleCode,
+                                  field_PDFid, field_PDFname, field_createTime)
+                            print(sql)
+                            cursor.execute(sql)
+                            print(pdfname + "已保存")
 
-                        sql1 = "update tag set a = %d,b = %d,c = %d,d = %d"% (i,j,x,z)
-                        cursor.execute(sql1)
-                        db.commit()  # 提交事务
-                        print(i,j,x,z)
+                            sql1 = "update tag set a = %d,b = %d,c = %d,d = %d"% (i,j,x,z)
+                            cursor.execute(sql1)
+                            db.commit()  # 提交事务
+                            print(i,j,x,z)
+                        else:
+                            print(pdfurl+"下载失败")
+                            #将下载失败的文件路径放入表中等待下次执行
 
 except Exception as e:
     db.rollback()
