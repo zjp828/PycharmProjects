@@ -161,6 +161,7 @@ try:
                         # 保存数据库字段——信息id
                         field_PDFid = pdfhtml[z].find("a").get("id").strip()
 
+                        #查询表中是否有相同的field_PDFid，若有则更新，没有则插入
                         pdfurl = "http://icid.iachina.cn/ICID/files/piluxinxi/pdf/" + field_PDFid
 
                         pdfname = pdfhtml[z].find("a").get_text().strip()
